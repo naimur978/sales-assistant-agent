@@ -1,0 +1,215 @@
+{
+  "_note": "Gold = brochure pages (file:page) that contain the answer. Labels written by reading the brochures, before any retriever was run. 'hard' = little word overlap with the gold page.",
+  "in_scope": [
+    {
+      "q": "We have Larox pressure filters but performance drops whenever our feed grade changes",
+      "gold": [
+        "filter-optimizer:2"
+      ],
+      "hard": true
+    },
+    {
+      "q": "How many filter plates and what filtration area does the Larox PF 15 have?",
+      "gold": [
+        "larox-pf-brochure-a:4",
+        "larox-pf-brochure-b:6"
+      ]
+    },
+    {
+      "q": "How long does a filter cloth change take on a Larox PF?",
+      "gold": [
+        "larox-pf-brochure-a:2",
+        "larox-pf-brochure-b:4",
+        "larox-pf-ds:3"
+      ]
+    },
+    {
+      "q": "Which filter can be used when food-grade FDA compliance is required?",
+      "gold": [
+        "larox-pf-ds:2",
+        "larox-pf-ds:4"
+      ]
+    },
+    {
+      "q": "What is the maximum flotation cell capacity of the Concorde Cell?",
+      "gold": [
+        "concorde-cell:4"
+      ]
+    },
+    {
+      "q": "Which product helps recover particles under 20 microns that we currently lose to tailings?",
+      "gold": [
+        "concorde-cell:2",
+        "concorde-cell:6",
+        "concorde-cell:7"
+      ],
+      "hard": true
+    },
+    {
+      "q": "How can I upgrade the rotor and stator in my existing OK flotation cells?",
+      "gold": [
+        "floatforce-upgrade:1",
+        "floatforce-upgrade:2"
+      ]
+    },
+    {
+      "q": "We want steadier pulp level and air control across our flotation cells",
+      "gold": [
+        "cellstation:1"
+      ],
+      "hard": true
+    },
+    {
+      "q": "Which communication protocols does CellStation support towards the DCS?",
+      "gold": [
+        "cellstation:2"
+      ]
+    },
+    {
+      "q": "What sparger options are available for the ColumnCell?",
+      "gold": [
+        "columncell:2",
+        "columncell:3"
+      ]
+    },
+    {
+      "q": "Which pump is best for highly abrasive slurry coming out of a grinding mill?",
+      "gold": [
+        "md-series-pump:1"
+      ]
+    },
+    {
+      "q": "Do you have a customer example where a pump change saved power and improved recovery?",
+      "gold": [
+        "md-series-pump:3"
+      ],
+      "hard": true
+    },
+    {
+      "q": "What slurry pumps do you offer for hydrocyclone feed?",
+      "gold": [
+        "orion-series-pump:2",
+        "orion-series-pump:3"
+      ]
+    },
+    {
+      "q": "How do we remove dissolved organics from a battery metals solvent extraction circuit?",
+      "gold": [
+        "ac-filter:1"
+      ],
+      "hard": true
+    },
+    {
+      "q": "What removes insoluble organics using coalescing media?",
+      "gold": [
+        "gm-filter:1"
+      ]
+    },
+    {
+      "q": "What are the weight and floor area of the Larox PF 60 Model 2025?",
+      "gold": [
+        "larox-pf-brochure-b:8"
+      ]
+    },
+    {
+      "q": "Where can we run filtration tests with our own material?",
+      "gold": [
+        "larox-pf-brochure-a:6",
+        "larox-pf-brochure-b:9",
+        "larox-pf-ds:6"
+      ],
+      "hard": true
+    },
+    {
+      "q": "Is the PF-DS suitable for sticky cakes and slow filtering slurries?",
+      "gold": [
+        "larox-pf-ds:2",
+        "larox-pf-ds:4"
+      ]
+    },
+    {
+      "q": "Which setpoints does the Filter optimizer adjust automatically?",
+      "gold": [
+        "filter-optimizer:2",
+        "filter-optimizer:3"
+      ]
+    },
+    {
+      "q": "What operating pressure can the Larox PF filters handle?",
+      "gold": [
+        "larox-pf-brochure-a:2",
+        "larox-pf-brochure-a:5",
+        "larox-pf-brochure-b:4",
+        "larox-pf-brochure-b:7",
+        "larox-pf-brochure-b:8",
+        "larox-pf-ds:2",
+        "larox-pf-ds:5"
+      ]
+    },
+    {
+      "q": "Can we improve a self-aspirated pneumatic flotation cell by adding forced air?",
+      "gold": [
+        "concorde-cell:10"
+      ],
+      "hard": true
+    },
+    {
+      "q": "How many CellStation units have been sold?",
+      "gold": [
+        "cellstation:1"
+      ]
+    },
+    {
+      "q": "Which shaft seal option avoids product dilution in a slurry pump?",
+      "gold": [
+        "orion-series-pump:7"
+      ]
+    },
+    {
+      "q": "What spare and wear parts and maintenance services are available for the Larox PF?",
+      "gold": [
+        "larox-pf-brochure-a:7",
+        "larox-pf-brochure-b:10",
+        "larox-pf-ds:7"
+      ]
+    }
+  ],
+  "out_of_scope": [
+    {
+      "q": "What is the price of a Metso HP300 cone crusher?"
+    },
+    {
+      "q": "What is the weather in Santiago, Chile today?"
+    },
+    {
+      "q": "Give me a recipe for sourdough bread"
+    },
+    {
+      "q": "What are the dimensions of your vertical roller mill?"
+    },
+    {
+      "q": "Who won the football world cup in 2018?"
+    },
+    {
+      "q": "How do I size a high-rate thickener for tailings?"
+    },
+    {
+      "q": "What is the power consumption of a Metso ball mill?"
+    },
+    {
+      "q": "Compare the Larox PF with a belt press filter from a competitor"
+    },
+    {
+      "q": "What is the capacity of a Nordberg jaw crusher?"
+    },
+    {
+      "q": "How do I dose flocculant in a thickener?"
+    },
+    {
+      "q": "Which vibrating screen should I use for wet screening of aggregates?"
+    },
+    {
+      "q": "What are the specifications of the Metso FrothSense camera?"
+    }
+  ]
+}
