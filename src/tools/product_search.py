@@ -4,13 +4,12 @@ threshold can be tuned per method."""
 import hashlib
 import json
 import math
-import os
 import re
-import time
 from collections import Counter
 
 import numpy as np
 
+from src import llm
 from src.config import CACHE_DIR, EMBED_MODEL
 
 STOP = set(
@@ -66,29 +65,17 @@ def _embed(texts: list[str], task: str) -> np.ndarray:
     cache_file = CACHE_DIR / "embeddings.json"
     cache = json.loads(cache_file.read_text()) if cache_file.exists() else {}
     keys = [hashlib.sha1(f"{EMBED_MODEL}|{task}|{t}".encode()).hexdigest() for t in texts]
-    missing = [(k, t) for k, t in zip(keys, texts) if k not in cache]
+    missing = [(k, t) for k, t in zip(keys, texts, strict=True) if k not in cache]
     if missing:
-        from dotenv import load_dotenv
-        from google import genai
-        from google.genai import errors, types
+        from google.genai import types
 
-        load_dotenv()
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        client = llm.client()
         for i in range(0, len(missing), 40):
             batch = missing[i : i + 40]
-            for attempt in range(8):
-                try:
-                    res = client.models.embed_content(
-                        model=EMBED_MODEL,
-                        contents=[t for _, t in batch],
-                        config=types.EmbedContentConfig(task_type=task),
-                    )
-                    break
-                except errors.ClientError as e:
-                    if e.code != 429 or attempt == 7:
-                        raise
-                    time.sleep(35)  # free tier: 100 items/min
-            for (k, _), e in zip(batch, res.embeddings):
+            res = llm.call(lambda batch=batch: client.models.embed_content(
+                model=EMBED_MODEL, contents=[t for _, t in batch],
+                config=types.EmbedContentConfig(task_type=task)), "embed")
+            for (k, _), e in zip(batch, res.embeddings, strict=True):
                 cache[k] = e.values
             cache_file.write_text(json.dumps(cache))  # keep progress between batches
     m = np.array([cache[k] for k in keys], dtype=float)
@@ -130,7 +117,15 @@ class ProductSearch:
         self.bm25, self.dense = BM25(texts), Dense(texts)
         self.pages = {c["id"]: c["text"] for c in chunks}
 
-    def search(self, query: str, k: int = 4) -> dict:
-        hits = [{**self.chunks[i], "bm25": s} for i, s in self.bm25.search(query, k)]
-        gate = float(self.dense.all_scores(query).max())
+    def search(self, query: str | list[str], k: int = 4) -> dict:
+        """Accepts one query or several (e.g. the model's rewrite AND the user's own words); rankings are fused
+        with reciprocal rank fusion so a good hit under any wording survives."""
+        queries = [query] if isinstance(query, str) else [q for q in query if q.strip()]
+        fused: dict[int, float] = {}
+        for q in queries:
+            for rank, (i, _) in enumerate(self.bm25.search(q, len(self.chunks)), 1):
+                fused[i] = fused.get(i, 0.0) + 1 / (60 + rank)
+        top = sorted(fused, key=fused.get, reverse=True)[:k]
+        hits = [{**self.chunks[i], "bm25": self.bm25.all_scores(queries[0])[i]} for i in top]
+        gate = max(float(self.dense.all_scores(q).max()) for q in queries)
         return {"hits": hits, "gate_score": gate}

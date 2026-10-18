@@ -33,7 +33,6 @@ def grade(item, r):
     claims_text = norm(" ".join(c.claim for c in r.claims))
     answered = r.status == "answered"
     if item["kind"] in ("unanswerable",):
-        bad = answered or any(has(claims_text, x) for x in item["must_not"] if answered)
         return "WRONG" if answered else "correct_refusal"
     if item["kind"] == "ambiguous":
         return "review" if answered else "correct_refusal"

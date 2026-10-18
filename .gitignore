@@ -5,3 +5,7 @@ __pycache__/
 .venv/
 *.pyc
 .cache/
+candidate-brief.md
+interview_notes.md
+.ruff_cache/
+.pytest_cache/

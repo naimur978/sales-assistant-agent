@@ -1,0 +1,91 @@
+{
+ "FSR-0001": {
+  "country": "Chile",
+  "equipment": "columncell",
+  "onsite_hours": 12.3,
+  "travel_hours": 2.2,
+  "total": 1639.0,
+  "currency": "USD"
+ },
+ "FSR-0002": {
+  "country": "Sweden",
+  "onsite_hours": 13.8,
+  "travel_hours": 7.6,
+  "total": 2770.0,
+  "currency": "EUR"
+ },
+ "FSR-0003": {
+  "country": "Russia",
+  "onsite_hours": 9.2,
+  "travel_hours": 6.5,
+  "total": 2540.0,
+  "currency": "USD"
+ },
+ "FSR-0005": {
+  "total": null
+ },
+ "FSR-0009": {
+  "country": "Canada",
+  "total": 4489.0,
+  "currency": "CAD"
+ },
+ "FSR-0011": {
+  "total": 4150.0,
+  "currency": "CAD"
+ },
+ "FSR-0013": {
+  "onsite_hours": 14.1,
+  "travel_hours": 2.1,
+  "total": 2340.0,
+  "currency": "EUR"
+ },
+ "FSR-0014": {
+  "equipment": "larox_pf_ds",
+  "quantity_replaced": 16.0,
+  "total": 4367.0,
+  "currency": "CAD"
+ },
+ "FSR-0016": {
+  "total": null,
+  "onsite_hours": null
+ },
+ "FSR-0017": {
+  "total": null
+ },
+ "FSR-0020": {
+  "country": "South Africa",
+  "total": 15200.0,
+  "currency": "ZAR"
+ },
+ "FSR-0026": {
+  "total": 17690.0,
+  "currency": "SEK"
+ },
+ "FSR-0027": {
+  "equipment": "larox_pf_ds",
+  "total": null,
+  "quantity_replaced": 12.0
+ },
+ "FSR-0028": {
+  "total": null
+ },
+ "FSR-0031": {
+  "total": 2081.0,
+  "currency": "EUR"
+ },
+ "FSR-0035": {
+  "country": "Chile",
+  "total": 2850.0,
+  "currency": "USD",
+  "travel_hours": 10.1
+ },
+ "FSR-0041": {
+  "total": 2600.0,
+  "currency": "EUR"
+ },
+ "FSR-0044": {
+  "equipment": "larox_pf_ds",
+  "total": 19850.0,
+  "currency": "SEK"
+ }
+}

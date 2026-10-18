@@ -27,7 +27,7 @@ def load_chunks(brochure_dir: Path) -> list[dict]:
     for path in sorted(Path(brochure_dir).glob("*.md")):
         raw = path.read_text(encoding="utf-8")
         parts = PAGE_RE.split(raw)  # [header, page_no, body, page_no, body, ...]
-        for page_no, body in zip(parts[1::2], parts[2::2]):
+        for page_no, body in zip(parts[1::2], parts[2::2], strict=True):
             text = _clean(body)
             if len(re.findall(r"[A-Za-z]{3,}", text)) < 5:
                 continue  # image-only / near-empty page

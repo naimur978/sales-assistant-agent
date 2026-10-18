@@ -1,0 +1,15 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      # No API key and no data/ folder in CI: only the offline tests run; data-dependent tests skip themselves.
+      - run: ruff check .
+      - run: python -m pytest -q

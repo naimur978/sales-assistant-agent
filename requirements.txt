@@ -3,3 +3,5 @@ python-dotenv
 pydantic
 numpy
 pytest
+pandas
+scikit-learn

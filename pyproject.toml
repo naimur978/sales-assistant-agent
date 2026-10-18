@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "T20"]   # errors, pyflakes, imports, bugbear, upgrades, no stray print()
+ignore = ["E501", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["T20", "E402", "B023"]       # scripts print results on purpose
+"src/main.py" = ["T20"]
+"src/tools/*.py" = []
+"tests/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
