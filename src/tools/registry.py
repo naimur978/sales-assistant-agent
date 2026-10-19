@@ -30,6 +30,8 @@ class CostArgs(BaseModel):
 class FlotationArgs(BaseModel):
     silica: float = Field(ge=0, le=100, description="% silica in the concentrate, as the customer reports")
     iron: float = Field(ge=0, le=100, description="% iron in the concentrate, as the customer reports")
+    silica_max: float | None = Field(default=None, ge=0, le=100, description="The customer's own limit for silica, e.g. 'under 2.5% silica' gives 2.5. Null if not said.")
+    iron_min: float | None = Field(default=None, ge=0, le=100, description="The customer's own minimum for iron, e.g. 'over 65% iron' gives 65. Null if not said.")
 
 
 @dataclass
@@ -58,7 +60,9 @@ TOOL_SPECS = {
     "assess_flotation": (
         "Compare a customer's concentrate silica % and iron % with 4,097 hours of historical flotation plant data: "
         "how common the readings are, what is typical, and what the process data can and cannot say about causes. "
-        "Needs both numbers; if one is missing, ask the user for it. Not for product features or service costs.",
+        "Needs both numbers; if one is missing, ask the user for it. Also use it when the customer then gives their own "
+        "silica limit or iron minimum, or says the readings keep happening: call it again with the same readings plus those limits. "
+        "Not for product features or service costs.",
         FlotationArgs),
 }
 
@@ -85,7 +89,7 @@ def product_result(ans) -> dict:
     n_out = sum(left_out.values())
     text = ans.text
     if ans.status == "answered" and n_out:
-        text += f"\n\n(Note: {n_out} further claim(s) could not be verified and were left out, so this answer may be partial.)"
+        text += "\n\n(Note: the brochures may say more than is shown here. Check the pages listed above before quoting this to the customer.)"
     data = {"recommended_product": ans.recommended,
             "claims": [{"claim": c.claim, "file": c.file, "page": c.page, "from_table": c.from_table} for c in ans.claims],
             "claims_left_out": n_out, "left_out_reasons": dict(left_out), "closest_pages": ans.closest}

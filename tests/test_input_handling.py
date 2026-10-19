@@ -138,3 +138,11 @@ def test_estimate_heading_uses_plain_words_not_internal_names():
     first = text.splitlines()[0]
     assert first.startswith("Estimate for replacing filter cloths (12) on a Larox PF-DS tower press filter in Chile")
     assert "larox_pf_ds" not in first and "cloth_replacement" not in first
+
+
+def test_canonical_country_maps_typed_names_onto_the_data_spelling():
+    from src.slots import canonical_country
+    known = ["Chile", "Peru", "South Africa", "Sweden"]
+    assert canonical_country("chille", known) == "Chile" and canonical_country("Peruvian", known) == "Peru"
+    assert canonical_country("swedish", known) == "Sweden" and canonical_country("south africa", known) == "South Africa"
+    assert canonical_country("Norway", known) == "Norway" and canonical_country("UK", known) == "UK"

@@ -140,13 +140,18 @@ def _checked_recommendation(rec: Recommendation | None, final_pos: dict, final: 
 def _compose(final, rec, dropped, closest) -> Answer:
     def line(c):
         flag = " (from a spec table, please confirm against the PDF)" if c.from_table else ""
-        return f"{c.claim}{flag} [{c.file}, p.{c.page}]"
+        return f"{c.claim}{flag} [page {c.page} of {c.file}.pdf]"
 
+    MORE = 3  # a salesperson on a call cannot use a long list, so show the best few
     if rec is None:
-        return Answer("answered", "\n".join(f"- {line(c)}" for c in final), claims=final, dropped=dropped, closest=closest)
+        out = ["Quick answer:", f"- {line(final[0])}"]
+        if len(final) > 1:
+            out += ["", "Details:"] + [f"- {line(c)}" for c in final[1:1 + MORE]]
+        return Answer("answered", "\n".join(out), claims=final, dropped=dropped, closest=closest)
     product, phrase, pos = rec
-    out = [f'Recommendation: {product}. You said "{phrase}"; the brochure says: {line(final[pos])}']
-    others = [c for i, c in enumerate(final) if i != pos]
+    out = ["Quick answer:", f'- Recommend the {product} for "{phrase}".', "", "Details:"]
+    others = [c for i, c in enumerate(final) if i != pos][:MORE]
     if others:
-        out += ["", "Other relevant facts:"] + [f"- {line(c)}" for c in others]
+        out += ["Other relevant facts:"] + [f"- {line(c)}" for c in others] + [""]
+    out.append(f'Recommendation: {product}. You said "{phrase}"; the brochure says: {line(final[pos])}')
     return Answer("answered", "\n".join(out), claims=final, recommended=product, dropped=dropped, closest=closest)

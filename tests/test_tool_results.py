@@ -14,7 +14,7 @@ CLAIM = ExtractedClaim(claim="The optimizer keeps performance up.", quote="Optim
 
 
 def answered(dropped=()):
-    return Answer("answered", "- The optimizer keeps performance up. [filter-optimizer, p.2]", claims=[CLAIM],
+    return Answer("answered", "- The optimizer keeps performance up. [page 2 of filter-optimizer.pdf]", claims=[CLAIM],
                   recommended="Filter optimizer", dropped=list(dropped), closest=["filter-optimizer:2"])
 
 
@@ -32,7 +32,8 @@ def test_left_out_claims_are_counted_by_reason_and_flagged_as_partial():
     r = product_result(answered(dropped))
     assert r["data"]["claims_left_out"] == 3
     assert r["data"]["left_out_reasons"] == {"quote_not_on_page": 1, "number_not_in_quote": 1, "quote_does_not_support_claim": 1}
-    assert "3 further claim(s) could not be verified" in r["text"] and "may be partial" in r["text"]
+    assert "the brochures may say more than is shown here" in r["text"] and "Check the pages listed above" in r["text"]
+    assert not any(ch.isdigit() for ch in r["text"].split("(Note:")[1])  # no counts for the salesperson to puzzle over
 
 
 def test_text_of_a_removed_claim_never_reaches_the_assistant():

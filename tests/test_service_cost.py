@@ -90,7 +90,7 @@ def test_bottom_up_uses_target_country_rates_and_travel():
 def test_parts_in_other_currency_are_not_converted():
     r = estimate(EstimateRequest(equipment="larox_pf_ds", job="cloth_replacement", country="Chile", quantity=12), VISITS)
     assert "EUR" in r["bottom_up"]["parts"] and r["bottom_up"]["parts"]["EUR"]["low"] == 480
-    assert any("NOT converted" in n for n in r["notes"])
+    assert any("not added to the USD budget" in n for n in r["notes"])
 
 
 def test_unknown_country_gives_no_invented_rates():
@@ -102,4 +102,61 @@ def test_unknown_country_gives_no_invented_rates():
 def test_visits_without_totals_are_flagged_not_counted_as_cost():
     r = estimate(EstimateRequest(equipment="larox_pf_ds", job="cloth_replacement", country="Chile", quantity=12), VISITS)
     assert sum(o["n"] for o in r["observed_totals"].values()) == 3  # C has no total
-    assert any("do not state a total" in n for n in r["notes"])
+    assert any("give no total cost" in n for n in r["notes"])
+
+
+
+# ---- how the estimate reads
+def text_for(visits=VISITS, **kw):
+    from src.tools.service_cost import render
+    req = dict(equipment="larox_pf_ds", job="cloth_replacement", country="Chile", quantity=12)
+    return render(estimate(EstimateRequest(**{**req, **kw}), visits))
+
+
+def test_the_budget_comes_first_then_the_breakdown_then_the_sources():
+    out = text_for().split("\n")
+    assert out[0].startswith("Estimate for replacing filter cloths (12)")
+    order = [out.index(h) for h in ("Budget for labour and travel (USD):", "Breakdown:", "Parts, not converted:",
+                                    "Totals of similar visits, as reported:")]
+    assert order == sorted(order)
+    assert any(line.startswith("Based on ") and "similar past visits" in line for line in out)
+
+
+def test_ranges_use_to_and_a_single_value_is_not_written_as_a_range():
+    out = text_for()
+    assert " to " in out and "n=" not in out and "median" not in out
+    assert "98-98" not in out and not any(f"{x}-{x}" in out for x in ("98", "4,367"))
+
+
+def test_visits_are_counted_in_words():
+    out = text_for()
+    assert "1 visit" in out and "visits" in out
+
+
+def test_caveats_are_plain_sentences_under_good_to_know():
+    out = text_for()
+    assert "Good to know:" in out and "- Part prices are only available in EUR, so they are not added to the USD budget" in out
+    assert "e.g." not in out and "bottom-up" not in out and "'as per agreement'" not in out
+
+
+def test_a_rebuilt_total_is_explained_in_plain_words():
+    from src.tools.service_cost import render
+    visits = [dict(v) for v in VISITS]
+    visits[1] = {**visits[1], "total_cost": None, "labour_rate": 100, "travel_rate": 50}  # B has hours, rates, no total
+    out = render(estimate(EstimateRequest(equipment="larox_pf_ds", job="cloth_replacement", country="Chile", quantity=12), visits))
+    assert "was rebuilt from its hours, rates and parts" in out
+
+
+
+# ---- the country as typed must still find the reports
+def test_a_misspelled_or_adjective_country_finds_the_same_reports_as_the_exact_name():
+    exact = estimate(EstimateRequest(equipment="larox_pf_ds", job="cloth_replacement", country="Chile", quantity=12), VISITS)
+    for typed in ("chille", "Chilean", "CHILE", "Chile "):
+        got = estimate(EstimateRequest(equipment="larox_pf_ds", job="cloth_replacement", country=typed, quantity=12), VISITS)
+        assert got["bottom_up"]["service_only"] == exact["bottom_up"]["service_only"], typed
+        assert got["request"]["country"] == "Chile"  # shown the way the data spells it
+
+
+def test_an_unknown_country_stays_as_typed_and_gets_no_invented_rates():
+    got = estimate(EstimateRequest(equipment="larox_pf_ds", job="cloth_replacement", country="Norway", quantity=12), VISITS)
+    assert got["request"]["country"] == "Norway" and got["bottom_up"]["service_only"] is None

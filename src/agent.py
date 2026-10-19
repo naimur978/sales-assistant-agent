@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from src import llm, prompts
 from src.config import HISTORY_TOKEN_BUDGET, MAX_INPUT_CHARS, TURN_DEADLINE_S
-from src.guard import OFF_TOPIC, check_reply
+from src.guard import OFF_TOPIC, check_reply, looks_like_injection
 from src.inputs import clean_input
 from src.llm import Usage
 from src.prompts import AGENT_SYSTEM
@@ -16,7 +16,10 @@ from src.tools.registry import Tool, build_tools
 from src.trace import log_turn
 
 MAX_STEPS = 6  # model calls per user message
-SLOT_NAMES = ("equipment", "job", "country", "quantity", "silica", "iron")
+STATUS_BY_TOOL = {"product_info": "searching the brochures and checking the quotes",
+                  "estimate_service_cost": "building the estimate from past visits",
+                  "assess_flotation": "analysing the plant data"}
+SLOT_NAMES = ("equipment", "job", "country", "quantity", "silica", "iron", "silica_max", "iron_min")
 
 
 def approx_tokens(content) -> int:
@@ -50,6 +53,8 @@ class Agent:
         self.turn_starts: list[int] = []  # index in history where each user message begins
         self.known: dict = {}  # details the user gave that the code has checked; never dropped from the chat
         self.trace: list[dict] = []
+        self.on_step = lambda step: None  # the terminal sets this to print each tool call as it finishes (-v)
+        self.on_status = lambda text: None  # the terminal sets this to show what the assistant is doing
         self.tool_data: list[str] = []  # exact fields from tools; the reply guard accepts figures found here, but users never see it
         self.tool_texts: list[str] = []  # every tool result so far: the only allowed source of facts
         self.log = log
@@ -100,6 +105,7 @@ class Agent:
             if time.monotonic() > deadline:
                 self.trace.append({"step": step, "type": "deadline"})
                 return "That is taking too long, so I stopped. Please try again in a moment."
+            self.on_status("thinking")
             resp = self.llm(self.history, list(self.tools.values()))
             content = resp.candidates[0].content
             self.history.append(content)
@@ -110,9 +116,12 @@ class Agent:
                 return self._vet(text)
             replies = []
             for c in calls:
+                tool = self._resolve(c.name)
+                self.on_status(STATUS_BY_TOOL.get(tool.name, f"using {tool.name}") if tool else "thinking")
                 result = self._run_tool(c.name, dict(c.args or {}))
-                self.trace.append({"step": step, "type": "tool", "name": c.name, "args": dict(c.args or {}),
+                self.trace.append({"step": step, "type": "tool", "name": tool.name if tool else "unknown tool", "args": dict(c.args or {}),
                                    "status": result["status"], "result": result["text"]})
+                self.on_step(self.trace[-1])
                 self.tool_texts.append(result["text"])
                 self.tool_data.append(json.dumps(result.get("data", {}), default=str))
                 replies.append(types.Part.from_function_response(name=c.name, response=result))
@@ -122,6 +131,7 @@ class Agent:
 
     def _vet(self, text: str) -> str:
         """Show the reply only if it passes the guard. One repair attempt, then fall back to the tool output itself."""
+        self.on_status("checking the reply")
         problems = check_reply(text, self.tool_texts + self.tool_data, self.user_text)
         if not problems:
             return text or "Sorry, I could not produce an answer."
@@ -138,7 +148,7 @@ class Agent:
             return retry
         self.trace.append({"type": "guard", "problems": problems, "stage": "after_repair"})
         if self.tool_texts:
-            return "I could not verify my own summary, so here is the tool output exactly as produced:\n\n" + "\n\n".join(
+            return "\n\n".join(
                 self.tool_texts[self._tool_start:] or self.tool_texts[-1:])
         return OFF_TOPIC
 
@@ -164,6 +174,9 @@ class Agent:
         if len(message) > MAX_INPUT_CHARS:
             return (f"That message is too long ({len(message):,} characters, the limit is {MAX_INPUT_CHARS:,}). "
                     f"Please shorten it or split it into parts.")
+        if looks_like_injection(message):
+            self.trace.append({"type": "guard", "problems": ["prompt injection"], "stage": "input"})
+            return OFF_TOPIC
         self._trim_history()
         self.context["last_user_message"] = message
         start, self._tool_start = len(self.trace), len(self.tool_texts)

@@ -300,10 +300,17 @@
    "estimate_service_cost": {
     "equipment": "larox_pf_ds",
     "job": "cloth_replacement",
-    "quantity": 12,
-    "country": "Chile"
+    "quantity": 12
    }
-  }
+  },
+  "reply_has_any": [
+   [
+    "budget for labour and travel"
+   ],
+   [
+    "chile"
+   ]
+  ]
  },
  {
   "id": "messy_demonym",
@@ -391,5 +398,36 @@
    ]
   },
   "asks_question": true
+ },
+ {
+  "id": "flotation_followup_targets",
+  "turns": [
+   "The customer is getting 3.1% silica and 64.5% iron in their concentrate. They think that's normal. What do you think?",
+   "Our target is under 2.5% silica and over 65% iron. And yes, it's been around 3% silica most of the last two weeks, not just today"
+  ],
+  "expect_tools": [
+   "assess_flotation"
+  ],
+  "forbid_tools": [
+   "product_info",
+   "estimate_service_cost"
+  ],
+  "args_include": {
+   "assess_flotation": {
+    "silica": 3.1,
+    "iron": 64.5,
+    "silica_max": 2.5,
+    "iron_min": 65
+   }
+  },
+  "reply_has_any": [
+   [
+    "target",
+    "limit"
+   ],
+   [
+    "2.5"
+   ]
+  ]
  }
 ]

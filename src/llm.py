@@ -45,6 +45,11 @@ class Usage:
             return None
         return (self.input_tokens * p["input"] + self.output_tokens * p["output"]) / 1_000_000
 
+    def short(self) -> str:
+        """One short line for the terminal. The cost is shown only when prices are set."""
+        cost = self.cost_usd()
+        return f"{self.calls} model calls, {self.input_tokens + self.output_tokens:,} tokens" + (f", ~${cost:.4f}" if cost is not None else "")
+
     def summary(self) -> str:
         cost = self.cost_usd()
         return (f"{self.calls} model calls, {self.input_tokens:,} input + {self.output_tokens:,} output tokens, "

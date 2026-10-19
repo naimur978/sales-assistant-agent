@@ -40,7 +40,7 @@ def grade(item, r):
     if forbidden:
         return "WRONG"
     if not answered:
-        return "refused" if item["kind"] != "table" else "correct_refusal"
+        return "correct_refusal" if item["kind"] in ("table", "false_premise") else "refused"  # the dataset notes accept a refusal for a false premise
     ok_all = all(has(claims_text, x) for x in item["include_all"])
     ok_any = (not item["include_any"]) or any(has(claims_text, x) for x in item["include_any"])
     if ok_all and ok_any and (item["include_all"] or item["include_any"]):

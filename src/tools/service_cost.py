@@ -12,6 +12,7 @@ from statistics import median
 from pydantic import BaseModel
 
 from src.ingest.services import EQUIPMENT_LABELS, JOB_LABELS, Equipment, JobTag
+from src.slots import canonical_country
 
 JOBS_WITH_QUANTITY = {"cloth_replacement": "cloth", "wear_part_replacement": None}
 MIN_SIMILAR = 3
@@ -64,6 +65,8 @@ def estimate(req: EstimateRequest, visits: list[dict]) -> dict:
     if questions:
         return {"status": "needs_info", "questions": questions}
 
+    # "chille" or "Chilean" must find the Chile reports, otherwise the labour and travel budget would silently disappear
+    req = req.model_copy(update={"country": canonical_country(req.country, sorted({v["country"] for v in visits if v["country"]}))})
     similar = [v for v in visits if v["equipment"] == req.equipment and req.job in v["job_tags"]]
     notes = []
     if len(similar) < MIN_SIMILAR:
@@ -96,9 +99,9 @@ def estimate(req: EstimateRequest, visits: list[dict]) -> dict:
     bottom_up = {"currency": local_cur, "onsite_hours": hours, "travel_hours": travel,
                  "labour_rate": labour_rate, "travel_rate": travel_rate, "service_only": None, "parts": {}}
     if not local:
-        notes.append(f"No past reports from {req.country}: travel time and rates could not be taken from that country.")
+        notes.append(f"There are no past reports from {req.country}, so travel time and rates could not be taken from there.")
     elif not (labour_rate and travel_rate and travel and hours):
-        notes.append(f"Reports from {req.country} do not give enough hours/rates to build a bottom-up estimate.")
+        notes.append(f"The reports from {req.country} do not give enough hours and rates for a breakdown.")
     else:
         parts_lo = {"labour": hours["min"] * labour_rate["min"], "travel": travel["min"] * travel_rate["min"]}
         parts_md = {"labour": hours["median"] * labour_rate["median"], "travel": travel["median"] * travel_rate["median"]}
@@ -124,50 +127,85 @@ def estimate(req: EstimateRequest, visits: list[dict]) -> dict:
         if not prices:
             notes.append("No past report prints a unit price for these parts, so parts cost is not included.")
         elif local_cur and local_cur not in prices:
-            notes.append(f"Part prices are only available in {', '.join(prices)}, not {local_cur}; "
-                         f"they are shown separately and NOT converted (the reports contain no exchange rates).")
+            notes.append(f"Part prices are only available in {' and '.join(prices)}, so they are not added to the {local_cur} budget "
+                         f"(the reports give no exchange rates).")
 
     n_stated = sum(1 for v in similar if comparable_total(v) is not None)
     if n_stated < len(similar):
-        notes.append(f"{len(similar) - n_stated} of {len(similar)} comparable visits do not state a total "
-                     f"(e.g. 'as per agreement' / 'invoice to follow'), so they only inform hours, not cost.")
+        notes.append(f"{len(similar) - n_stated} of the {len(similar)} similar visits give no total cost, so they only show hours.")
     if req.country and not any(_same(v["country"], req.country) for v in similar):
-        notes.append(f"None of the comparable visits were in {req.country}; the observed totals include other countries' "
-                     f"travel and rates.")
+        notes.append(f"None of the similar visits were in {req.country}, so the totals above include travel and rates from other countries.")
 
-    return {"status": "estimate", "request": req.model_dump(), "similar_ids": [v["report_id"] for v in similar],
+    none_local = bool(req.country) and not any(_same(v["country"], req.country) for v in similar)
+    return {"status": "estimate", "none_local": none_local, "request": req.model_dump(), "similar_ids": [v["report_id"] for v in similar],
             "observed_totals": observed_totals, "bottom_up": bottom_up, "notes": notes}
 
 
+def _money(x: float) -> str:
+    return f"{x:,.0f}"
+
+
+def _to(lo: float, hi: float, fmt=_money) -> str:
+    return fmt(lo) if lo == hi else f"{fmt(lo)} to {fmt(hi)}"
+
+
+def _g(x: float) -> str:
+    return f"{x:g}"
+
+
+def _visits(n: int) -> str:
+    return f"{n} visit" + ("" if n == 1 else "s")
+
+
 def render(result: dict) -> str:
-    """Plain-text summary for the salesperson. Every figure traces to listed report IDs."""
+    """Plain-text answer for the salesperson. The budget comes first, then the breakdown, the sources and a few
+    plain caveats. Every figure traces to the listed report ids."""
     if result["status"] == "needs_info":
         return "Ask the user (do not guess or retry until they answer):\n" + "\n".join(f"- {q}" for q in result["questions"])
     if result["status"] == "insufficient_data":
         return result["message"]
     r, bu = result["request"], result["bottom_up"]
     out = [f"Estimate for {JOB_LABELS[r['job']]}" + (f" ({r['quantity']:g})" if r["quantity"] else "")
-           + f" on {EQUIPMENT_LABELS[r['equipment']]}" + (f" in {r['country']}" if r["country"] else "")
-           + f", based on {len(result['similar_ids'])} similar past visits ({', '.join(result['similar_ids'])}).", ""]
+           + f" on {EQUIPMENT_LABELS[r['equipment']]}" + (f" in {r['country']}" if r["country"] else ""), ""]
     so, cur = bu["service_only"], bu["currency"]
+    quick = ["Quick answer:"]
     if so:
-        h, t = bu["onsite_hours"], bu["travel_hours"]
-        out += [f"Labour + travel ({cur}, {r['country']} rates): about {so['median']:,.0f} typical "
-                f"(range {so['low']:,.0f}-{so['high']:,.0f}).",
-                f"  labour: {h['min']:g}-{h['max']:g} h on site (median {h['median']:g}, n={h['n']}) at "
-                f"{bu['labour_rate']['min']:g}-{bu['labour_rate']['max']:g} {cur}/h",
-                f"  travel: {t['min']:g}-{t['max']:g} h (median {t['median']:g}, n={t['n']}) at "
-                f"{bu['travel_rate']['min']:g}-{bu['travel_rate']['max']:g} {cur}/h"]
-    for pc, p in bu["parts"].items():
-        u = p["unit_price"]
-        out.append(f"Parts ({pc}, not converted): {r['quantity']:g} x {u['min']:g}-{u['max']:g} per unit = "
-                   f"{p['low']:,.0f}-{p['high']:,.0f} {pc} (from {', '.join(p['ids'])}).")
-    out.append("")
-    out.append("What similar visits actually cost (as reported, all-in, not converted):")
+        quick.append(f"- Budget about {_money(so['median'])} {cur} for labour and travel (range {_money(so['low'])} to {_money(so['high'])}).")
+    else:
+        quick.append("- No labour and travel budget could be built from the reports, so see the totals of similar visits below.")
+    if bu["parts"]:
+        extra = " or ".join(f"{_to(p['low'], p['high'])} {pc}" for pc, p in bu["parts"].items())
+        quick.append(f"- On top of that, parts cost {extra}, not converted because the reports give no exchange rates.")
+    where = f", none in {r['country']}" if result.get("none_local") and r["country"] else ""
+    rough = ", so treat this as a rough guide." if result.get("none_local") or result["notes"] else "."
+    quick.append(f"- Based on {len(result['similar_ids'])} similar past visits{where}{rough}")
+    out += [*quick, "", "Details:", ""]
+    if so:
+        h, t, lr, tr = bu["onsite_hours"], bu["travel_hours"], bu["labour_rate"], bu["travel_rate"]
+        out += [f"Budget for labour and travel ({cur}):",
+                f"  Typical    about {_money(so['median'])}",
+                f"  Range      {_money(so['low'])} to {_money(so['high'])}", "",
+                "Breakdown:",
+                f"  Labour     {_to(h['min'], h['max'], _g)} hours on site, at {_to(lr['min'], lr['max'], _g)} {cur} per hour",
+                f"  Travel     {_to(t['min'], t['max'], _g)} hours, at {_to(tr['min'], tr['max'], _g)} {cur} per hour", ""]
+    if bu["parts"]:
+        noun = "cloth" if JOBS_WITH_QUANTITY.get(r["job"]) == "cloth" else "part"
+        qty = r["quantity"]
+        label = f"{qty:g} {noun}" + ("" if qty == 1 else "s")
+        out.append("Parts, not converted:")
+        for pc, p in bu["parts"].items():
+            u = p["unit_price"]
+            out.append(f"  {label} at {_to(u['min'], u['max'], _g)} {pc} each, {_to(p['low'], p['high'])} {pc} in total")
+        out.append("")
+    out.append("Totals of similar visits, as reported:")
+    rebuilt = []
     for c, o in result["observed_totals"].items():
-        out.append(f"  {c}: {o['min']:,.0f}-{o['max']:,.0f} (median {o['median']:,.0f}, n={o['n']}) - "
-                   + ", ".join(f"{rid}{'*' if 'derived' in kind else ''}" for rid, _, kind, _ in o["visits"]))
-    if any("derived" in k for o in result["observed_totals"].values() for _, _, k, _ in o["visits"]):
-        out.append("  * total rebuilt from printed hours x rates + parts because the report's own total is missing")
-    out += [""] + [f"Note: {n}" for n in result["notes"]]
-    return "\n".join(out)
+        out.append(f"  {c}   {_to(o['min'], o['max']):<18}{_visits(o['n'])}")
+        rebuilt += [rid for rid, _, kind, _ in o["visits"] if "derived" in kind]
+    out += ["", "Based on " + f"{len(result['similar_ids'])} similar past visits:", "  " + ", ".join(result["similar_ids"]), ""]
+    notes = list(result["notes"])
+    if rebuilt:
+        notes.append(f"The total for {', '.join(rebuilt)} was rebuilt from its hours, rates and parts, because the report ends before its total.")
+    if notes:
+        out += ["Good to know:"] + [f"- {n}" for n in notes]
+    return "\n".join(out).rstrip()

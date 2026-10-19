@@ -22,7 +22,7 @@ def test_typical_readings_are_not_called_worse_than_typical():
 
 
 def test_poor_readings_are_flagged_on_both():
-    assert "worse than this plant's typical performance on both" in render(assess(Readings(silica=3.1, iron=64.5)))
+    assert "Not unusual, but not good either" in render(assess(Readings(silica=3.1, iron=64.5)))
 
 
 def test_readings_outside_observed_range_are_warned():
@@ -34,10 +34,18 @@ def test_readings_outside_observed_range_are_warned():
 def test_causal_advice_is_withheld_when_model_does_not_generalise():
     d = assess(Readings(silica=3.1, iron=64.5))["drivers"]
     assert not d["trusted"] and max(d["test_r2_linear"], d["test_r2_gbm"]) < 0.3
-    assert "do NOT support firm advice" in render(assess(Readings(silica=3.1, iron=64.5)))
+    assert "no firm advice on which setting to change" in render(assess(Readings(silica=3.1, iron=64.5)))
 
 
 def test_invalid_readings_rejected():
     for bad in (dict(silica=-1, iron=64), dict(silica=3, iron=140)):
         with pytest.raises(ValidationError):
             Readings(**bad)
+
+
+def test_the_customers_own_targets_decide_the_verdict():
+    out = render(assess(Readings(silica=3.1, iron=64.5, silica_max=2.5, iron_min=65)))
+    quick = out.split("Details:")[0]
+    assert "- Out of their target. Silica 3.1% is above their 2.5% limit, and iron 64.5% is below their 65% minimum." in quick
+    assert "of hours meet that target" in quick
+    assert "Within their target." in render(assess(Readings(silica=2.0, iron=66, silica_max=2.5, iron_min=65)))

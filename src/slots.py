@@ -50,6 +50,21 @@ def _plain(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
 
 
+def canonical_country(name: str, known: list[str]) -> str:
+    """Map what was typed ('chille', 'Chilean') onto a country spelled the way the data spells it. Unknown names stay as typed."""
+    n = _plain(name).strip()
+    by_plain = {_plain(k): k for k in known}
+    if n in by_plain:
+        return by_plain[n]
+    for group in COUNTRY_GROUPS:
+        if n in group:
+            for member in sorted(group):
+                if member in by_plain:
+                    return by_plain[member]
+    close = difflib.get_close_matches(n, list(by_plain), n=1, cutoff=0.85) if len(n) >= 4 else []
+    return by_plain[close[0]] if close else name
+
+
 def _country_in(country: str, text: str) -> bool:
     c, t = _plain(country).strip(), _plain(text)
     names = {c}
@@ -116,7 +131,7 @@ def ungrounded(args: dict, user_text: str) -> list[str]:
     """Names of slots whose value the user never said. Empty list = all grounded."""
     text, low = user_text, user_text.lower()
     bad = []
-    for name in ("quantity", "silica", "iron"):
+    for name in ("quantity", "silica", "iron", "silica_max", "iron_min"):
         if args.get(name) is None:
             continue
         v = float(args[name])

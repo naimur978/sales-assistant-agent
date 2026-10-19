@@ -23,6 +23,8 @@ TRUSTED_R2 = 0.30  # below this, process variables do not predict silica well en
 class Readings(BaseModel):
     silica: float = Field(ge=0, le=100, description="% silica in the concentrate")
     iron: float = Field(ge=0, le=100, description="% iron in the concentrate")
+    silica_max: float | None = Field(default=None, ge=0, le=100, description="the customer's silica limit, %")
+    iron_min: float | None = Field(default=None, ge=0, le=100, description="the customer's iron minimum, %")
 
 
 @lru_cache
@@ -40,8 +42,15 @@ def position(r: Readings, df: pd.DataFrame) -> dict:
     recent = df[df.date >= df.date.max() - pd.Timedelta(days=30)]
     inside = f.min() <= r.iron <= f.max() and s.min() <= r.silica <= s.max()
     q = lambda x: {"p10": x.quantile(.1), "median": x.median(), "p90": x.quantile(.9)}
+    spec = None
+    if r.silica_max is not None or r.iron_min is not None:
+        ok_s = (s <= r.silica_max) if r.silica_max is not None else pd.Series(True, index=df.index)
+        ok_f = (f >= r.iron_min) if r.iron_min is not None else pd.Series(True, index=df.index)
+        spec = {"silica_ok": None if r.silica_max is None else bool(r.silica <= r.silica_max),
+                "iron_ok": None if r.iron_min is None else bool(r.iron >= r.iron_min),
+                "plant_hours_in_spec": float((ok_s & ok_f).mean())}
     return {
-        "n_hours": len(df), "from": df.date.min(), "to": df.date.max(),
+        "spec": spec, "n_hours": len(df), "from": df.date.min(), "to": df.date.max(),
         "silica_share_at_or_above": float((s >= r.silica).mean()),
         "iron_share_at_or_below": float((f <= r.iron).mean()),
         "both_share": float(((s >= r.silica) & (f <= r.iron)).mean()),
@@ -94,47 +103,64 @@ def assess(r: Readings) -> dict:
                         "'Normal' here means 'common in this plant's history', not 'meets the customer's specification'."]}
 
 
-def _verdict(r: dict, p: dict) -> str:
-    worse_si, worse_fe = r["silica"] > p["silica_typical"]["median"], r["iron"] < p["iron_typical"]["median"]
-    if worse_si and worse_fe:
-        return "it happens regularly, but it is worse than this plant's typical performance on both."
-    if worse_si or worse_fe:
-        return "mixed: worse than typical on one measure, not on the other."
-    return "these readings are typical or better for this plant."
+def _spec_lines(r: dict, p: dict, pct) -> list[str]:
+    """When the customer has named their own limits, the answer is measured against those, not against the plant history."""
+    sp = p["spec"]
+    clauses, misses = [], []
+    if sp["silica_ok"] is not None:
+        clauses.append(f"silica {r['silica']:g}% is {'within' if sp['silica_ok'] else 'above'} their {r['silica_max']:g}% limit")
+        misses += [] if sp["silica_ok"] else ["silica"]
+    if sp["iron_ok"] is not None:
+        clauses.append(f"iron {r['iron']:g}% is {'at or above' if sp['iron_ok'] else 'below'} their {r['iron_min']:g}% minimum")
+        misses += [] if sp["iron_ok"] else ["iron"]
+    head = "Out of their target." if misses else "Within their target."
+    return [f"- {head} {clauses[0][0].upper() + clauses[0][1:]}" + (f", and {clauses[1]}." if len(clauses) > 1 else "."),
+            f"- In the plant data, {pct(sp['plant_hours_in_spec'])} of hours meet that target."]
+
+
+def _quick_answer(r: dict, p: dict, d: dict, pct) -> list[str]:
+    """The lines a salesperson can read on the phone. Everything after 'Details' backs them up."""
+    ts, tf = p["silica_typical"]["median"], p["iron_typical"]["median"]
+    cannot = ("- This data cannot tell us which setting to change." if not d["trusted"]
+              else "- Some process settings are linked to silica, see the details.")
+    if p.get("spec"):
+        return ["Quick answer:", *_spec_lines(r, p, pct), cannot]
+    worse_si, worse_fe = r["silica"] > ts, r["iron"] < tf
+    verdict = (f"Not unusual, but not good either. About {pct(p['both_share'])} of hours are this poor or worse." if worse_si and worse_fe
+               else "Mixed. One reading is worse than typical and the other is not." if worse_si or worse_fe
+               else "Yes, that is normal. Their readings are typical or better.")
+    return ["Quick answer:",
+            f"- {verdict}",
+            f"- Typical is {ts:.1f}% silica and {tf:.1f}% iron, against their {r['silica']:g}% and {r['iron']:g}%.",
+            cannot]
 
 
 def render(a: dict) -> str:
     r, p, d = a["readings"], a["position"], a["drivers"]
     pct = lambda x: f"{100 * x:.0f}%"
-    out = [f"Readings: {r['silica']:g}% silica, {r['iron']:g}% iron in concentrate, vs {p['n_hours']:,} hourly "
-           f"readings ({p['from']:%Y-%m-%d} to {p['to']:%Y-%m-%d}).", "",
-           "Where it sits:",
+    quick = _quick_answer(r, p, d, pct)
+    asks = (["When did it start, and what changed around then?"] if p.get("spec")
+            else ["What is their silica target?", "Does it keep happening, or was it just today?"])
+    out = [*quick, "", "Worth asking:", *[f"- {q}" for q in asks], "", "Details:", "",
+           f"Where it sits (against {p['n_hours']:,} hourly readings, {p['from']:%b %Y} to {p['to']:%b %Y}):",
            f"- Silica {r['silica']:g}% or worse in {pct(p['silica_share_at_or_above'])} of hours "
-           f"(typical {p['silica_typical']['median']:.1f}%, middle 80% of hours {p['silica_typical']['p10']:.1f}-{p['silica_typical']['p90']:.1f}%).",
+           f"(middle 80% of hours {p['silica_typical']['p10']:.1f}-{p['silica_typical']['p90']:.1f}%).",
            f"- Iron {r['iron']:g}% or lower in {pct(p['iron_share_at_or_below'])} of hours "
-           f"(typical {p['iron_typical']['median']:.1f}%, middle 80% {p['iron_typical']['p10']:.1f}-{p['iron_typical']['p90']:.1f}%).",
-           f"- Both at least this poor in {pct(p['both_share'])} of hours: {_verdict(r, p)}"]
+           f"(middle 80% {p['iron_typical']['p10']:.1f}-{p['iron_typical']['p90']:.1f}%)."]
     if not p["inside_observed_range"]:
         out.append("- WARNING: these readings are outside the range seen in the data; treat the comparison with caution.")
     g = p["silica_given_iron"]
     if g:
-        out.append(f"- Readings are consistent with each other (iron and silica move in opposite directions, "
-                   f"correlation {p['iron_silica_correlation']:.2f}). At iron near {r['iron']:g}% (n={g['n']} hours) silica is "
-                   f"usually {g['median']:.1f}% ({g['p10']:.1f}-{g['p90']:.1f}); {r['silica']:g}% or higher happens in "
-                   f"{pct(g['share_at_or_above'])} of those hours.")
+        out.append(f"- At iron near {r['iron']:g}%, silica is usually {g['median']:.1f}% ({g['p10']:.1f}-{g['p90']:.1f}); "
+                   f"{r['silica']:g}% or higher happens in {pct(g['share_at_or_above'])} of those hours.")
     rc = p["recent_30d"]
-    out.append(f"- Last 30 days of data: mean silica {rc['silica_mean']:.2f}%, mean iron {rc['iron_mean']:.2f}%.")
+    out.append(f"- Last 30 days of data, mean silica {rc['silica_mean']:.2f}%, mean iron {rc['iron_mean']:.2f}%.")
     out += ["", "What the process data says about causes:",
-            f"- Can process settings predict silica? Model trained on the first {d['train_hours']:,} hours, tested on the later "
-            f"{d['test_hours']:,}: R2 = {d['test_r2_linear']:.2f} (linear), {d['test_r2_gbm']:.2f} (gradient boosting). "
-            + ("Reasonably predictive." if d["trusted"] else
-               "That is no better than guessing the average, so these data do NOT support firm advice on which setting to change.")]
-    if d["consistent_in_all_5_blocks"]:
-        c, v = d["consistent_in_all_5_blocks"][0]
-        out.append(f"- Only {len(d['consistent_in_all_5_blocks'])} variable(s) keep the same direction in all 5 time blocks; strongest: "
-                   f"{c} ({'higher' if v > 0 else 'lower'} values go with {'higher' if v > 0 else 'lower'} silica).")
-    out.append(f"- In the {d['n_high']} hours with silica >= 3.1% vs the {d['n_low']} hours below 2.0%, biggest differences:")
-    for c, sd_diff, hi, lo in d["high_vs_low_silica"][:4]:
-        out.append(f"    {c}: {hi:,.1f} vs {lo:,.1f} ({sd_diff:+.2f} standard deviations)")
-    out += [""] + [f"Caveat: {c}" for c in a["caveats"]]
+            f"- Process settings predict silica {'reasonably well' if d['trusted'] else 'no better than guessing the average'} "
+            f"(R2 {d['test_r2_linear']:.2f} linear, {d['test_r2_gbm']:.2f} gradient boosting, tested on later hours)."
+            + ("" if d["trusted"] else " So there is no firm advice on which setting to change."),
+            f"- Hours with silica of 3.1% or more ({d['n_high']:,}) versus below 2.0% ({d['n_low']:,}) differ most in (high-silica hours vs low):"]
+    for c, sd_diff, hi, lo in d["high_vs_low_silica"][:2]:
+        out.append(f"    {c}, {hi:,.1f} vs {lo:,.1f}")
+    out += ["", "Keep in mind:"] + [f"- {c}" for c in a["caveats"]]
     return "\n".join(out)
