@@ -2,7 +2,9 @@
 Each case runs REPEATS times because model output varies between runs.
   python -m scripts.eval_agent [repeats] [case_id ...]"""
 import json
+import math
 import re
+import statistics
 import sys
 import time
 
@@ -67,9 +69,11 @@ results, started = [], time.time()
 for case in cases:
     runs = []
     for _ in range(repeats):
+        t0 = time.time()
         agent, reply, tools = run_case(case)
+        seconds = time.time() - t0
         fails, guard = check(case, reply, tools, agent.trace)
-        runs.append({"fails": fails, "guard": [g["problems"] for g in guard], "reply": reply,
+        runs.append({"seconds": seconds, "fails": fails, "guard": [g["problems"] for g in guard], "reply": reply,
                      "tools": [(t["name"], t["status"]) for t in tools]})
     ok = sum(not r["fails"] for r in runs)
     results.append({"id": case["id"], "passed": ok, "runs": runs})
@@ -82,6 +86,9 @@ passed = sum(r["passed"] for r in results)
 guards = sum(bool(run["guard"]) for r in results for run in r["runs"])
 print(f"\n{passed}/{total} runs passed | cases passing every repeat: {sum(r['passed'] == repeats for r in results)}/{len(results)} "
       f"| runs where the reply guard fired: {guards} | {time.time() - started:.0f}s")
+times = sorted(run["seconds"] for r in results for run in r["runs"])
+p95 = times[min(len(times) - 1, math.ceil(0.95 * len(times)) - 1)]
+print(f"latency per case: median {statistics.median(times):.1f}s | p95 {p95:.1f}s | max {times[-1]:.1f}s ({len(times)} runs)")
 for r in results:
     for i, run in enumerate(r["runs"]):
         if run["fails"]:

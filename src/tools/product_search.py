@@ -6,6 +6,7 @@ import json
 import math
 import re
 from collections import Counter
+from time import sleep
 
 import numpy as np
 
@@ -59,6 +60,23 @@ class BM25:
         return out
 
 
+EMBED_BATCH_CHARS = 12_000  # long table pages go in small batches so one request stays under the token limit
+EMBED_WAITS, EMBED_WAIT_S = 5, 65
+
+
+def _batches(items: list, max_items: int = 40):
+    batch, size = [], 0
+    for item in items:
+        n = len(item[1])
+        if batch and (len(batch) >= max_items or size + n > EMBED_BATCH_CHARS):
+            yield batch
+            batch, size = [], 0
+        batch.append(item)
+        size += n
+    if batch:
+        yield batch
+
+
 def _embed(texts: list[str], task: str) -> np.ndarray:
     """Gemini embeddings with an on-disk cache so evals re-run for free."""
     CACHE_DIR.mkdir(exist_ok=True)
@@ -70,11 +88,17 @@ def _embed(texts: list[str], task: str) -> np.ndarray:
         from google.genai import types
 
         client = llm.client()
-        for i in range(0, len(missing), 40):
-            batch = missing[i : i + 40]
-            res = llm.call(lambda batch=batch: client.models.embed_content(
-                model=EMBED_MODEL, contents=[t for _, t in batch],
-                config=types.EmbedContentConfig(task_type=task)), "embed")
+        for batch in _batches(missing):
+            for attempt in range(EMBED_WAITS):  # the per-minute token limit clears after about a minute
+                try:
+                    res = llm.call(lambda batch=batch: client.models.embed_content(
+                        model=EMBED_MODEL, contents=[t for _, t in batch],
+                        config=types.EmbedContentConfig(task_type=task)), "embed")
+                    break
+                except llm.LLMUnavailable:
+                    if attempt == EMBED_WAITS - 1:
+                        raise
+                    sleep(EMBED_WAIT_S)
             for (k, _), e in zip(batch, res.embeddings, strict=True):
                 cache[k] = e.values
             cache_file.write_text(json.dumps(cache))  # keep progress between batches

@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+from src.ingest.tables import load_tables
+
 PAGE_RE = re.compile(r"^## Page (\d+)\s*$", re.MULTILINE)
 
 
@@ -23,6 +25,7 @@ def _clean(text: str) -> str:
 
 def load_chunks(brochure_dir: Path) -> list[dict]:
     """One chunk per brochure page: {id, file, page, text}."""
+    tables = load_tables(brochure_dir)  # spec tables rebuilt from the PDFs, keyed 'file:page'
     chunks = []
     for path in sorted(Path(brochure_dir).glob("*.md")):
         raw = path.read_text(encoding="utf-8")
@@ -31,6 +34,9 @@ def load_chunks(brochure_dir: Path) -> list[dict]:
             text = _clean(body)
             if len(re.findall(r"[A-Za-z]{3,}", text)) < 5:
                 continue  # image-only / near-empty page
+            rebuilt = tables.get(f"{path.stem}:{int(page_no)}")
+            if rebuilt:
+                text += "\nSPEC TABLE (rebuilt from the PDF, one value per line):\n" + "\n".join(rebuilt)
             chunks.append(
                 {
                     "id": f"{path.stem}:{int(page_no)}",
