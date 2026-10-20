@@ -31,10 +31,18 @@ def test_readings_outside_observed_range_are_warned():
     assert "WARNING" in render(a)
 
 
-def test_causal_advice_is_withheld_when_model_does_not_generalise():
-    d = assess(Readings(silica=3.1, iron=64.5))["drivers"]
-    assert not d["trusted"] and max(d["test_r2_linear"], d["test_r2_gbm"]) < 0.3
-    assert "no firm advice on which setting to change" in render(assess(Readings(silica=3.1, iron=64.5)))
+def test_setting_advice_is_withheld_when_no_variable_is_consistent():
+    g = assess(Readings(silica=3.1, iron=64.5))["good_hours"]
+    assert g["meaningful"] and g["consistent"] == [] and g["groups_compared"] == 6
+    assert "cannot tell us which setting to change" in render(assess(Readings(silica=3.1, iron=64.5)))
+
+
+def test_episodes_are_counted_from_consecutive_hours():
+    df = load()
+    e = assess(Readings(silica=3.1, iron=64.5))["episodes"]
+    assert e["share_hours"] == pytest.approx((df[SI] >= 3.1).mean())
+    assert 1 <= e["median_h"] <= e["mean_h"] <= e["longest_h"] and e["count"] < (df[SI] >= 3.1).sum()
+    assert assess(Readings(silica=99, iron=64.5))["episodes"] == {"count": 0}
 
 
 def test_invalid_readings_rejected():
@@ -49,3 +57,14 @@ def test_the_customers_own_targets_decide_the_verdict():
     assert "- Out of their target. Silica 3.1% is above their 2.5% limit, and iron 64.5% is below their 65% minimum." in quick
     assert "of hours meet that target" in quick
     assert "Within their target." in render(assess(Readings(silica=2.0, iron=66, silica_max=2.5, iron_min=65)))
+
+
+def test_best_hours_comparison_follows_the_customers_silica():
+    a, b = assess(Readings(silica=3.1, iron=64.5))["good_hours"], assess(Readings(silica=4.5, iron=64.5))["good_hours"]
+    assert a["meaningful"] and b["meaningful"] and b["n_poor"] < a["n_poor"]
+    assert "hours at 4.5% silica or more" in render(assess(Readings(silica=4.5, iron=64.5)))
+
+
+def test_comparison_is_skipped_when_the_reading_is_not_worse_than_typical():
+    a = assess(Readings(silica=1.5, iron=64.5))
+    assert not a["good_hours"]["meaningful"] and "too typical" in render(a)

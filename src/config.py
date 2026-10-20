@@ -8,7 +8,7 @@ CACHE_DIR = ROOT / ".cache"
 
 EMBED_MODEL = "gemini-embedding-001"
 
-GEN_MODEL = "gemini-3.5-flash-lite"
+GEN_MODEL = "gemini-3.1-flash-lite"
 TOP_K = 6
 GATE = 0.70  # loose on-topic gate (dense cosine); the verifier does the real safety work
 
