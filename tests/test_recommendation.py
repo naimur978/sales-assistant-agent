@@ -40,7 +40,7 @@ def test_valid_recommendation_leads_the_answer_with_product_from_file_name(run):
     a = run(Extraction(claims=[DS, OPT], recommendation=Recommendation(
         claim_index=1, customer_phrase="performance drops whenever our feed grade changes")))
     assert a.status == "answered" and a.recommended == "Metso Filter optimizer"
-    first = next(l for l in a.text.splitlines() if l.startswith("Recommendation:"))
+    first = next(ln for ln in a.text.splitlines() if ln.startswith("Recommendation:"))
     assert first.startswith("Recommendation: Metso Filter optimizer.") and "[page 2 of filter-optimizer.pdf]" in first
     assert "Other relevant facts:" in a.text and "[page 2 of larox-pf-ds.pdf]" in a.text
 
@@ -50,7 +50,7 @@ def test_the_quick_answer_is_one_short_line_and_the_rest_is_in_the_details(run):
         claim_index=1, customer_phrase="performance drops whenever our feed grade changes")))
     lines = a.text.splitlines()
     quick = lines[1:lines.index("Details:")]
-    assert lines[0] == "Quick answer:" and [l for l in quick if l] == [
+    assert lines[0] == "Quick answer:" and [ln for ln in quick if ln] == [
         '- Recommend the Metso Filter optimizer for "performance drops whenever our feed grade changes".']
 
 

@@ -39,7 +39,7 @@ def _series_lines(rows: list[list[str]]) -> list[str]:
         label, unit, vals = r[0], r[1], r[2:]
         if not label or not any(vals):
             continue
-        for size, v in zip(sizes, vals):
+        for size, v in zip(sizes, vals, strict=False):
             if size and v:
                 lines.append(f"{series}, size {size}: {label} = {v} {unit}".strip())
         if len([v for v in vals if v]) == 1:  # a single value spans every size (e.g. plate size)
@@ -70,7 +70,7 @@ def _model_lines(rows: list[list[str]]) -> list[str]:
     for r in rows[body:]:
         if not r[0] or len(r[0]) > 20:  # footnotes, not a model row
             continue
-        cells = [f"{h} = {v}" for h, v in zip(heads, r[1:]) if v and h]
+        cells = [f"{h} = {v}" for h, v in zip(heads, r[1:], strict=False) if v and h]
         lines.append(f"{r[0]}: " + "; ".join(cells))
     return lines
 
